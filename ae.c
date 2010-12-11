@@ -82,7 +82,19 @@ void aeDeleteEventLoop(aeEventLoop *eventLoop) {
 void aeStop(aeEventLoop *eventLoop) {
     eventLoop->stop = 1;
 }
-
+/**
+ *
+ * Set the detail info of aeFileEvent on the file event list
+ *
+ * Update the following places:
+ *
+ * 1) aeEventLoop -> aeFileEvent
+ *    a) mask
+ *    b) rfileProc/wfileProc
+ *    c) clientData
+ * 2) aeEventLoop -> apidata
+ * 3) aeEventLoop -> maxfd
+ */
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         aeFileProc *proc, void *clientData)
 {
@@ -100,6 +112,16 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
     return AE_OK;
 }
 
+/**
+ *
+ * Erase the detail info of aeFileEvent on the file event list
+ *
+ * Update the following places:
+ *
+ * 1) aeEventLoop -> aeFileEvent
+ *    a) mask
+ * 2) aeEventLoop -> maxfd
+ */
 void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask)
 {
     if (fd >= AE_SETSIZE) return;
@@ -141,6 +163,17 @@ static void aeAddMillisecondsToNow(long long milliseconds, long *sec, long *ms) 
     *ms = when_ms;
 }
 
+/**
+ * Add the aeTimeEvent to the time event list
+ *
+ * Update the following places:
+ * 1) aeEventLoop  -> timeEventHead
+ *    a) id
+ *    b) when_sec/when_ms
+ *    c) timeProc
+ *    d) finalizerProc
+ *    e) clientData
+ */
 long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
         aeTimeProc *proc, void *clientData,
         aeEventFinalizerProc *finalizerProc)
@@ -160,6 +193,9 @@ long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
     return id;
 }
 
+/**
+ * Delete the aeTimeEvent (id) from the time event list
+ */
 int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id)
 {
     aeTimeEvent *te, *prev = NULL;
@@ -182,7 +218,8 @@ int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id)
     return AE_ERR; /* NO event with the specified ID found */
 }
 
-/* Search the first timer to fire.
+/**
+ * Search the first timer to fire.
  * This operation is useful to know how many time the select can be
  * put in sleep without to delay any event.
  * If there are no timers NULL is returned.
@@ -251,6 +288,9 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
             } else {
                 aeDeleteTimeEvent(eventLoop, id);
             }
+            /**
+             * restart from the head, because the previous time event maybe can process now
+             */
             te = eventLoop->timeEventHead;
         } else {
             te = te->next;
