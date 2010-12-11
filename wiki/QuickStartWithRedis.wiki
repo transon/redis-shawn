@@ -30,7 +30,7 @@ shawny@ubuntu:~/software/redis-2.0.4$ ./redis-server
 [3758] 10 Dec 19:07:54 - 0 clients connected (0 slaves), 533436 bytes in use
 }}}
 
-*Step#4: Play withh the built in client "redis-cli"*
+*Step#4: Play with the built in client "redis-cli"*
 {{{
 shawny@ubuntu:~/software/redis-2.0.4$ ./redis-cli set user shawny
 OK
