@@ -1,5 +1,5 @@
-#summary One-sentence summary of this page.
 #labels Dict
+#Hash Tables Implementation.
 
 == Introduction ==
 {{{
