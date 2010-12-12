@@ -118,6 +118,8 @@ typedef struct dictIterator {
 #define dictGetEntryVal(he) ((he)->val)
 #define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)
 #define dictSize(d) ((d)->ht[0].used+(d)->ht[1].used)
+
+// if rehash is in progress, then return ture
 #define dictIsRehashing(ht) ((ht)->rehashidx != -1)
 
 /* API */
