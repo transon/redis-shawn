@@ -125,6 +125,17 @@ unsigned int dictGenHashFunction(const unsigned char *buf, int len) {
 
 /* Reset an hashtable already initialized with ht_init().
  * NOTE: This function should only called by ht_destroy(). */
+
+/**
+ * Put the data 'struct dictht' at here
+ *
+ * typedef struct dictht {
+ *     dictEntry **table;
+ *     unsigned long size;
+ *     unsigned long sizemask;
+ *     unsigned long used;
+ * }
+ */
 static void _dictReset(dictht *ht)
 {
     ht->table = NULL;
@@ -133,6 +144,26 @@ static void _dictReset(dictht *ht)
     ht->used = 0;
 }
 
+/**
+ * Put the data 'struct dict' and 'struct dictType' at here
+ *
+ * typedef struct dict {
+ *     dictType *type;
+ *     void *privdata;
+ *     dictht ht[2];
+ *     int rehashidx; // rehashing not in progress if rehashidx == -1
+ *     int iterators; // number of iterators currently running
+ * } dict;
+ *
+ * typedef struct dictType {
+ *     unsigned int (*hashFunction)(const void *key);
+ *     void *(*keyDup)(void *privdata, const void *key);
+ *     void *(*valDup)(void *privdata, const void *obj);
+ *     int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+ *     void (*keyDestructor)(void *privdata, void *key);
+ *     void (*valDestructor)(void *privdata, void *obj);
+ * } dictType;
+ */
 /* Create a new hash table */
 dict *dictCreate(dictType *type,
         void *privDataPtr)
@@ -151,7 +182,7 @@ int _dictInit(dict *d, dictType *type,
     _dictReset(&d->ht[1]);
     d->type = type;
     d->privdata = privDataPtr;
-    d->rehashidx = -1;
+    d->rehashidx = -1; // rehashing not in progress
     d->iterators = 0;
     return DICT_OK;
 }
@@ -162,6 +193,8 @@ int dictResize(dict *d)
 {
     int minimal;
 
+    // dict_can_resize: if the rehash is enable
+    // rehashidx: if rehash is in progress
     if (!dict_can_resize || dictIsRehashing(d)) return DICT_ERR;
     minimal = d->ht[0].used;
     if (minimal < DICT_HT_INITIAL_SIZE)
@@ -173,7 +206,7 @@ int dictResize(dict *d)
 int dictExpand(dict *d, unsigned long size)
 {
     dictht n; /* the new hashtable */
-    unsigned long realsize = _dictNextPower(size);
+    unsigned long realsize = _dictNextPower(size); //  the nearest power of 2 digit
 
     /* the size is invalid if it is smaller than the number of
      * elements already inside the hashtable */
@@ -206,7 +239,7 @@ int dictExpand(dict *d, unsigned long size)
  * Note that a rehashing step consists in moving a bucket (that may have more
  * thank one key as we use chaining) from the old to the new hash table. */
 int dictRehash(dict *d, int n) {
-    if (!dictIsRehashing(d)) return 0;
+    if (!dictIsRehashing(d)) return 0; // rehash isn't in progress, return 0
 
     while(n--) {
         dictEntry *de, *nextde;
@@ -214,7 +247,7 @@ int dictRehash(dict *d, int n) {
         /* Check if we already rehashed the whole table... */
         if (d->ht[0].used == 0) {
             _dictFree(d->ht[0].table);
-            d->ht[0] = d->ht[1];
+            d->ht[0] = d->ht[1]; // similar to the process array swap in linux kernel
             _dictReset(&d->ht[1]);
             d->rehashidx = -1;
             return 0;
@@ -310,7 +343,7 @@ int dictReplace(dict *d, void *key, void *val)
     dictEntry *entry, auxentry;
 
     /* Try to add the element. If the key
-     * does not exists dictAdd will suceed. */
+     * does not exists dictAdd will succeed. */
     if (dictAdd(d, key, val) == DICT_OK)
         return 1;
     /* It already exists, get the entry */
@@ -374,6 +407,13 @@ int dictDeleteNoFree(dict *ht, const void *key) {
 }
 
 /* Destroy an entire dictionary */
+
+/**
+ * 1) free key/value
+ * 2) free dictEntry
+ * 3) table
+ * 4) reset the table
+ */
 int _dictClear(dict *d, dictht *ht)
 {
     unsigned long i;
@@ -428,6 +468,9 @@ dictEntry *dictFind(dict *d, const void *key)
     return NULL;
 }
 
+/**
+ * key => dictEntry => value
+ */
 void *dictFetchValue(dict *d, const void *key) {
     dictEntry *he;
 
@@ -447,6 +490,14 @@ dictIterator *dictGetIterator(dict *d)
     return iter;
 }
 
+/**
+ * typedef struct dictIterator {
+ *     dict *d;
+ *     int table;
+ *     int index;
+ *     dictEntry *entry, *nextEntry;
+ * } dictIterator;
+ */
 dictEntry *dictNext(dictIterator *iter)
 {
     while (1) {
