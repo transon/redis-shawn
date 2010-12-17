@@ -1,2 +1,36 @@
 #labels async,multi-thread
 # 单线程异步处理事件，多线程处理IO
+
+== Code Skeleton ==
+
+*main
+ * initServerConfig
+ * initServer
+   * listCreate
+   * aeCreateEventLoop
+   * anetTcpServer
+   * dictCreate
+   * aeCreateTimeEvent
+   * aeCreateFileEvent
+     * acceptHandler
+       * anetAccept
+         * createClient
+           * anetNonBlock
+           * anetTcpNoDelay
+           * aeCreateFileEvent
+             * readQueryFromClient
+               * processInputBuffer
+                 *  processCommand
+                    * lookupCommand
+                      * queueMultiCommand
+                      * addReply
+                        * sendReplyToClient
+                          * sendReplyToClientWritev
+                          * write
+                        * listAddNodeTail
+                    * call
+           * selectDb
+           * listAddNodeTail
+
+ * aeMain
+   * aeProcessEvents
