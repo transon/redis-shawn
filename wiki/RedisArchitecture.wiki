@@ -3,34 +3,34 @@
 
 == Code Skeleton ==
 
-*main
- * initServerConfig
- * initServer
-   * listCreate
-   * aeCreateEventLoop
-   * anetTcpServer
-   * dictCreate
-   * aeCreateTimeEvent
-   * aeCreateFileEvent
-     * acceptHandler
-       * anetAccept
-         * createClient
-           * anetNonBlock
-           * anetTcpNoDelay
-           * aeCreateFileEvent
-             * readQueryFromClient
-               * processInputBuffer
-                 *  processCommand
-                    * lookupCommand
-                      * queueMultiCommand
-                      * addReply
-                        * sendReplyToClient
-                          * sendReplyToClientWritev
-                          * write
-                        * listAddNodeTail
-                    * call
-           * selectDb
-           * listAddNodeTail
+* main
+  * initServerConfig
+  * initServer
+    * listCreate
+    * aeCreateEventLoop
+    * anetTcpServer
+    * dictCreate
+    * aeCreateTimeEvent
+    * aeCreateFileEvent
+      * acceptHandler
+        * anetAccept
+          * createClient
+            * anetNonBlock
+            * anetTcpNoDelay
+            * aeCreateFileEvent
+              * readQueryFromClient
+                * processInputBuffer
+                  *  processCommand
+                     * lookupCommand
+                       * queueMultiCommand
+                       * addReply
+                         * sendReplyToClient
+                           * sendReplyToClientWritev
+                           * write
+                         * listAddNodeTail
+                     * call
+            * selectDb
+            * listAddNodeTail
 
- * aeMain
-   * aeProcessEvents
+  * aeMain
+    * aeProcessEvents
