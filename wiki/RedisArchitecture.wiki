@@ -1,0 +1,2 @@
+#labels async,multi-thread
+# 单线程异步处理事件，多线程处理IO
