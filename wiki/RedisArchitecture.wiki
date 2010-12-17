@@ -6,9 +6,9 @@
 * main
   * initServerConfig
 {{{
+参考：redis.c 
 
-初始化redisServer中的一部分fields的value，参考：redis.c 
-下面仅列出对理解影响比较大的field.
+初始化redisServer中的一部分fields的value，下面仅列出对理解影响比较大的field.
 static struct redisServer server;
 
 dbnum          => REDIS_DEFAULT_DBNUM;
@@ -24,34 +24,50 @@ appendfilename => appendonly.aof
     * aeCreateEventLoop
 {{{
 参考：ae.c
+
+为aeEventLoop结构体分配空间，对它的一些fields做一个简单的初始化
 }}}
     * anetTcpServer
 {{{
 参考：anet.c
+
+调用socket, bind, listen创建一个负责监听request的套接字
 }}}
     * dictCreate
 {{{
 参考：dict.c
+
+为dict结构体分配空间，对它的一些fields做一个简单的初始化
 }}}
     * aeCreateTimeEvent
 {{{
 参考：ae.c
+
+为aeTimeEvent结构体分配空间，初始化，然后将它放到eventLoop的timeEventHead链表的头，完成对timer event的注册
 }}}
     * aeCreateFileEvent
 {{{
 参考：ae.c
+
+初始化fd对应的aeFileEvent，完成对fd event的注册
 }}}
       * acceptHandler
 {{{
 参考：redis.c
+
+负责处理客户端的request
 }}}
         * anetAccept
 {{{
 参考：anet.c
+
+调用accept建立和客户端的连接
 }}}
           * createClient
 {{{
 参考：redis.c
+
+为redisClient结构体分配空间，初始化，以后所以和客户端打交道用到的数据都可以在这里找到。
 }}}
             * anetNonBlock
 {{{
@@ -68,6 +84,8 @@ appendfilename => appendonly.aof
               * readQueryFromClient
 {{{
 参考：redis.c
+
+作为fd event的回调函数，当一个描述符可读的时候被调用，读取客户端发送来的数据，然后调用下面的函数处理，参数当然就是redisClient了。
 }}}
                 * processInputBuffer
 {{{
