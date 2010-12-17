@@ -5,6 +5,15 @@
 
 * main
   * initServerConfig
+{{{
+
+static struct redisServer server;
+
+dbnum          => REDIS_DEFAULT_DBNUM;
+port           => REDIS_SERVERPORT
+dbfilename     => dump.rdb
+appendfilename => appendonly.aof
+}}}
   * initServer
     * listCreate
     * aeCreateEventLoop
