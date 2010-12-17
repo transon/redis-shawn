@@ -7,6 +7,8 @@
   * initServerConfig
 {{{
 
+初始化redisServer中的一部分fields的value，参考：redis.c 
+下面仅列出对理解影响比较大的field.
 static struct redisServer server;
 
 dbnum          => REDIS_DEFAULT_DBNUM;
@@ -16,30 +18,101 @@ appendfilename => appendonly.aof
 }}}
   * initServer
     * listCreate
+{{{
+参考：adlist.c
+}}}
     * aeCreateEventLoop
+{{{
+参考：ae.c
+}}}
     * anetTcpServer
+{{{
+参考：anet.c
+}}}
     * dictCreate
+{{{
+参考：dict.c
+}}}
     * aeCreateTimeEvent
+{{{
+参考：ae.c
+}}}
     * aeCreateFileEvent
+{{{
+参考：ae.c
+}}}
       * acceptHandler
+{{{
+参考：redis.c
+}}}
         * anetAccept
+{{{
+参考：anet.c
+}}}
           * createClient
+{{{
+参考：redis.c
+}}}
             * anetNonBlock
+{{{
+参考：anet.c
+}}}
             * anetTcpNoDelay
+{{{
+参考：anet.c
+}}}
             * aeCreateFileEvent
+{{{
+参考：ae.c
+}}}
               * readQueryFromClient
+{{{
+参考：redis.c
+}}}
                 * processInputBuffer
+{{{
+参考：redis.c
+}}}
                   *  processCommand
+{{{
+参考：redis.c
+}}}
                      * lookupCommand
+{{{
+参考：redis.c
+}}}
                        * queueMultiCommand
+{{{
+参考：redis.c
+}}}
                        * addReply
+{{{
+参考：redis.c
+}}}
                          * sendReplyToClient
+{{{
+参考：redis.c
+}}}
                            * sendReplyToClientWritev
+{{{
+参考：redis.c
+}}}
                            * write
                          * listAddNodeTail
+{{{
+参考：adlist.c
+}}}
                      * call
             * selectDb
+{{{
+参考：redis.c
+}}}
             * listAddNodeTail
-
+{{{
+参考：adlist.c
+}}}
   * aeMain
     * aeProcessEvents
+{{{
+参考：ae.c
+}}}
