@@ -41,12 +41,27 @@ struct sdshdr {
     char buf[];
 };
 
+/**
+ * base on sdsnewlen
+ */
 sds sdsnewlen(const void *init, size_t initlen);
 sds sdsnew(const char *init);
 sds sdsempty();
+
+/**
+ * get the sdshhr first, then get the length
+ */
 size_t sdslen(const sds s);
+
+/**
+ * base on sdsnewlen
+ */
 sds sdsdup(const sds s);
 void sdsfree(sds s);
+
+/**
+ * get the sdshdr first, then get the free
+ */
 size_t sdsavail(sds s);
 sds sdscatlen(sds s, void *t, size_t len);
 sds sdscat(sds s, char *t);

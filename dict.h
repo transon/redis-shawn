@@ -123,26 +123,115 @@ typedef struct dictIterator {
 #define dictIsRehashing(ht) ((ht)->rehashidx != -1)
 
 /* API */
+/**
+ * Allocate memory for data structure "struct dict"
+ * and initial the fields of it
+ */
 dict *dictCreate(dictType *type, void *privDataPtr);
+
+/**
+ * Create another hash table with the size is power of 2
+ * e.g.: 60  => 64
+ *     : 110 => 128
+ */
 int dictExpand(dict *d, unsigned long size);
+
+/**
+ * Add an element to the target hash table
+ * Need handle the case of rehashing
+ */
 int dictAdd(dict *d, void *key, void *val);
+
+/**
+ * Add an element, discarding the old if the key already
+ * exists
+ *
+ * Set the new value and free the old one
+ */
 int dictReplace(dict *d, void *key, void *val);
+
+/**
+ * Search and remove an element
+ */
 int dictDelete(dict *d, const void *key);
 int dictDeleteNoFree(dict *d, const void *key);
+
+/**
+ * Free dict and its hash tables
+ */
 void dictRelease(dict *d);
+
+/**
+ * Find the dictEntry according to key
+ */
 dictEntry * dictFind(dict *d, const void *key);
+
+/**
+ * key => dictEntry => value
+ */
 void *dictFetchValue(dict *d, const void *key);
+
+/**
+ * Resize the table to the minimal size that contains
+ * all the elements
+ */
 int dictResize(dict *d);
+
+/**
+ * Allocate memory for dictIterator and zero the fields
+ */
 dictIterator *dictGetIterator(dict *d);
+
+/**
+ * Get the next dictEntry
+ */
 dictEntry *dictNext(dictIterator *iter);
+
+/**
+ * Decrease the iterator counter
+ * and free the space of dictIterator
+ */
 void dictReleaseIterator(dictIterator *iter);
+
+/**
+ * Return a random entry from the hash table
+ */
 dictEntry *dictGetRandomKey(dict *d);
+
+/**
+ * Show the stats info of dict
+ */
 void dictPrintStats(dict *d);
+
+/**
+ * Get the hash value of char *
+ */
 unsigned int dictGenHashFunction(const unsigned char *buf, int len);
+
+/**
+ * Empty the hash table and zero the fields of dict
+ */
 void dictEmpty(dict *d);
+
+/**
+ * set dict_can_resize to 1
+ */
 void dictEnableResize(void);
+
+/**
+ * set dict_can_resize to 0
+ */
 void dictDisableResize(void);
+
+/**
+ * Performs N steps of incremental rehashing
+ */
 int dictRehash(dict *d, int n);
+
+/**
+ * Rehash for an amount of time between ms milliseconds
+ * and ms+1 milliseconds
+ */
 int dictRehashMilliseconds(dict *d, int ms);
 
 /* Hash table types */
