@@ -56,7 +56,7 @@
 e.g. Memory layout of a zipmap, for the map "foo" => "bar", "hello" => "world":
 {{{
 
-\x02  \x03  foo \x03  \x00  bar \x05  hello \x05  \x00   world  \xff
+\x02  \x03  foo \x03  \x00  bar \x05  hello \x05  \x00  world  \xff
   \     \    \    \     \    \    \      \    \     \     \
    \     \    \    \     \    \    \      \    \     \     \
     \     \    \    \     \    \    \      \    \     \     \
@@ -72,7 +72,7 @@ typedef struct zipmap {
 }zipmap;
 
 zipmap.foo = "bar";
-zipmap.hello = world;
+zipmap.hello = "world";
 
 
 }}}
