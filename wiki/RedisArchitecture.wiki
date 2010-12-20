@@ -163,9 +163,37 @@ appendfilename => appendonly.aof
 参考：adlist.c
 }}}
 
-  * loadAppendOnlyFile  `server.appendonly`
+  * loadAppendOnlyFile
 {{{
 参考:redis.c
+
+Only when the value of "server.appendonly" is true to execute this method
+
+Replay the append log file. On error REDIS_ERR is returned. On non fatal
+error (the append only file is zero-length) REDIS_OK is returned. On
+fatal error an error message is logged and the program exists.
+}}}
+    * redis_fstat
+{{{
+#defined redis_fstat fstat
+}}}
+    * createFakeClient
+{{{
+The Redis commands are always executed in the context of a client, so in
+order to load the append only file we need to create a fake client.
+}}}
+    * while statement
+{{{
+Read a line from append only file
+Command lookup using "lookupCommand"
+Call redisCommand's proc method to execute the command
+Discard the reply objects list from the fake client
+Clean up, ready for the next command
+Handle swapping while loading big datasets when VM is on
+}}}
+    * freeFakeClient
+{{{
+Free the memory of redisClient
 }}}
 
   * rdbLoad
