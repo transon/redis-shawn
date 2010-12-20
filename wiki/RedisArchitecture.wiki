@@ -131,6 +131,8 @@ appendfilename => appendonly.aof
                      * lookupCommand
 {{{
 参考：redis.c
+
+Search the redisCommand from cmdTable according to the command name.
 }}}
                        * queueMultiCommand
 {{{
@@ -139,14 +141,23 @@ appendfilename => appendonly.aof
                        * addReply
 {{{
 参考：redis.c
+
+Send apply 'obj' to client
+Register the reply to client event if not exist
+Add the obj to the tail of reply data list
+The callback of this event is sendReplyToClient
 }}}
                          * sendReplyToClient
 {{{
 参考：redis.c
+
+Send the data using sendReplyToClient or write directly.
 }}}
                            * sendReplyToClientWritev
 {{{
 参考：redis.c
+
+Call writev to send multi-buf data
 }}}
                            * write
                          * listAddNodeTail
@@ -202,6 +213,21 @@ Free the memory of redisClient
 }}}
   * aeMain
     * aeProcessEvents
+{{{
+参考：ae.c
+Process every pending time event, then every pending file event
+(that may be registered by time event callbacks just processed).
+Without special flags the function sleeps until some file event
+fires, or when the next time event occurs (if any).
+
+If flags is 0, the function does nothing and returns.
+if flags has AE_ALL_EVENTS set, all the kind of events are processed.
+if flags has AE_FILE_EVENTS set, file events are processed.
+if flags has AE_TIME_EVENTS set, time events are processed.
+if flags has AE_DONT_WAIT set the function returns ASAP until all
+the events that's possible to process without to wait are processed.
+}}}
+  * aeDeleteEventLoop
 {{{
 参考：ae.c
 }}}
