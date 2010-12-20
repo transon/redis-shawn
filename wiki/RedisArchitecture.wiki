@@ -1,6 +1,41 @@
 #labels async,multi-thread
 # 单线程异步处理事件，多线程处理IO
 
+== Files Organize ==
+
+ * anet.h/anet.c
+{{{
+网络通信
+}}}
+
+ * ae.h/ae.c,ae_select.c/ae_epoll.c/ae_kqueue.c
+{{{
+事件处理
+}}}
+
+ * adlist.h/adlist.c,dict.h/dict.c
+{{{
+主数据结构
+}}}
+
+ * zmalloc.h/zmalloc.c
+{{{
+内存分配
+}}}
+
+ * zipmap.h/zipmap.c
+{{{
+}}}
+
+ * sds.h/sds.c
+{{{
+}}}
+
+ * redis.h/redis.c
+{{{
+主函数
+}}}
+
 == Code Skeleton ==
 
 * main
