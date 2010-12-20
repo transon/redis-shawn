@@ -162,6 +162,16 @@ appendfilename => appendonly.aof
 {{{
 参考：adlist.c
 }}}
+
+  * loadAppendOnlyFile  `server.appendonly`
+{{{
+参考:redis.c
+}}}
+
+  * rdbLoad
+{{{
+参考:redis.c
+}}}
   * aeMain
     * aeProcessEvents
 {{{
