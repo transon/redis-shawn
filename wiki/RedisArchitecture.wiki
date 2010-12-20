@@ -13,7 +13,7 @@
 事件处理
 }}}
 
- * adlist.h/adlist.c,dict.h/dict.c
+ * adlist.h/adlist.c,dict.h/dict.c, zipmap.h/zipmap.c
 {{{
 主数据结构
 }}}
@@ -23,12 +23,10 @@
 内存分配
 }}}
 
- * zipmap.h/zipmap.c
-{{{
-}}}
 
  * sds.h/sds.c
 {{{
+动态字符串处理
 }}}
 
  * redis.h/redis.c
