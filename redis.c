@@ -985,12 +985,14 @@ static int stringmatch(const char *pattern, const char *string, int nocase) {
     return stringmatchlen(pattern,strlen(pattern),string,strlen(string),nocase);
 }
 
-/* Convert a string representing an amount of memory into the number of
- * bytes, so for instance memtoll("1Gi") will return 1073741824 that is
+/*
+ * Convert a string representing an amount of memory into the number of
+ * bytes, so for instance memtoll("1G") will return 1073741824 that is
  * (1024*1024*1024).
  *
  * On parsing error, if *err is not NULL, it's set to 1, otherwise it's
- * set to 0 */
+ * set to 0
+ */
 static long long memtoll(const char *p, int *err) {
     const char *u;
     char buf[128];
@@ -1032,9 +1034,11 @@ static long long memtoll(const char *p, int *err) {
     return val*mul;
 }
 
-/* Convert a long long into a string. Returns the number of
+/*
+ * Convert a long long into a string. Returns the number of
  * characters needed to represent the number, that can be shorter if passed
- * buffer length is not enough to store the whole number. */
+ * buffer length is not enough to store the whole number.
+ */
 static int ll2string(char *s, size_t len, long long value) {
     char buf[32], *p;
     unsigned long long v;
@@ -1082,9 +1086,11 @@ static void redisLog(int level, const char *fmt, ...) {
 
 /*====================== Hash table type implementation  ==================== */
 
-/* This is an hash table type that uses the SDS dynamic strings libary as
- * keys and radis objects as values (objects can hold SDS strings,
- * lists, sets). */
+/*
+ * This is an hash table type that uses the SDS dynamic strings library as
+ * keys and redis objects as values (objects can hold SDS strings,
+ * lists, sets).
+ */
 
 static void dictVanillaFree(void *privdata, void *val)
 {
@@ -2275,6 +2281,10 @@ static void call(redisClient *c, struct redisCommand *cmd) {
     cmd->proc(c);
     dirty = server.dirty-dirty;
 
+    /**
+     * If the switch of appendonly is OK, then write the command to
+     * append only file
+     */
     if (server.appendonly && dirty)
         feedAppendOnlyFile(cmd,c->db->id,c->argv,c->argc);
     if ((dirty || cmd->flags & REDIS_CMD_FORCE_REPLICATION) &&
@@ -2286,7 +2296,7 @@ static void call(redisClient *c, struct redisCommand *cmd) {
 }
 
 /* If this function gets called we already read a whole
- * command, argments are in the client argv/argc fields.
+ * command, arguments are in the client argv/argc fields.
  * processCommand() execute the command or prepare the
  * server for a bulk read from the client.
  *
@@ -6436,9 +6446,11 @@ static void zrevrankCommand(redisClient *c) {
 #define REDIS_HASH_KEY 1
 #define REDIS_HASH_VALUE 2
 
-/* Check the length of a number of objects to see if we need to convert a
+/*
+ * Check the length of a number of objects to see if we need to convert a
  * zipmap to a real hash. Note that we only check string encoded objects
- * as their string length can be queried in constant time. */
+ * as their string length can be queried in constant time.
+ */
 static void hashTryConversion(robj *subject, robj **argv, int start, int end) {
     int i;
     if (subject->encoding != REDIS_ENCODING_ZIPMAP) return;
@@ -6461,9 +6473,11 @@ static void hashTryObjectEncoding(robj *subject, robj **o1, robj **o2) {
     }
 }
 
-/* Get the value from a hash identified by key. Returns either a string
+/*
+ * Get the value from a hash identified by key. Returns either a string
  * object or NULL if the value cannot be found. The refcount of the object
- * is always increased by 1 when the value was found. */
+ * is always increased by 1 when the value was found.
+ */
 static robj *hashGet(robj *o, robj *key) {
     robj *value = NULL;
     if (o->encoding == REDIS_ENCODING_ZIPMAP) {
@@ -6484,8 +6498,10 @@ static robj *hashGet(robj *o, robj *key) {
     return value;
 }
 
-/* Test if the key exists in the given hash. Returns 1 if the key
- * exists and 0 when it doesn't. */
+/*
+ * Test if the key exists in the given hash. Returns 1 if the key
+ * exists and 0 when it doesn't.
+ */
 static int hashExists(robj *o, robj *key) {
     if (o->encoding == REDIS_ENCODING_ZIPMAP) {
         key = getDecodedObject(key);
@@ -6502,8 +6518,10 @@ static int hashExists(robj *o, robj *key) {
     return 0;
 }
 
-/* Add an element, discard the old if the key already exists.
- * Return 0 on insert and 1 on update. */
+/*
+ * Add an element, discard the old if the key already exists.
+ * Return 0 on insert and 1 on update.
+ */
 static int hashSet(robj *o, robj *key, robj *value) {
     int update = 0;
     if (o->encoding == REDIS_ENCODING_ZIPMAP) {
@@ -6531,8 +6549,10 @@ static int hashSet(robj *o, robj *key, robj *value) {
     return update;
 }
 
-/* Delete an element from a hash.
- * Return 1 on deleted and 0 on not found. */
+/*
+ * Delete an element from a hash.
+ * Return 1 on deleted and 0 on not found.
+ */
 static int hashDelete(robj *o, robj *key) {
     int deleted = 0;
     if (o->encoding == REDIS_ENCODING_ZIPMAP) {
@@ -8209,10 +8229,12 @@ static void slaveofCommand(redisClient *c) {
 
 /* ============================ Maxmemory directive  ======================== */
 
-/* Try to free one object form the pre-allocated objects free list.
+/*
+ * Try to free one object form the pre-allocated objects free list.
  * This is useful under low mem conditions as by default we take 1 million
  * free objects allocated. On success REDIS_OK is returned, otherwise
- * REDIS_ERR. */
+ * REDIS_ERR.
+ */
 static int tryFreeOneObjectFromFreelist(void) {
     robj *o;
 
@@ -8230,7 +8252,8 @@ static int tryFreeOneObjectFromFreelist(void) {
     }
 }
 
-/* This function gets called when 'maxmemory' is set on the config file to limit
+/*
+ * This function gets called when 'maxmemory' is set on the config file to limit
  * the max memory used by the server, and we are out of memory.
  * This function will try to, in order:
  *
@@ -8399,8 +8422,10 @@ static void feedAppendOnlyFile(struct redisCommand *cmd, int dictid, robj **argv
     sdsfree(buf);
 }
 
-/* In Redis commands are always executed in the context of a client, so in
- * order to load the append only file we need to create a fake client. */
+/*
+ * The Redis commands are always executed in the context of a client, so in
+ * order to load the append only file we need to create a fake client.
+ */
 static struct redisClient *createFakeClient(void) {
     struct redisClient *c = zmalloc(sizeof(*c));
 
@@ -8427,9 +8452,11 @@ static void freeFakeClient(struct redisClient *c) {
     zfree(c);
 }
 
-/* Replay the append log file. On error REDIS_OK is returned. On non fatal
- * error (the append only file is zero-length) REDIS_ERR is returned. On
- * fatal error an error message is logged and the program exists. */
+/*
+ * Replay the append log file. On error REDIS_ERR is returned. On non fatal
+ * error (the append only file is zero-length) REDIS_OK is returned. On
+ * fatal error an error message is logged and the program exists.
+ */
 int loadAppendOnlyFile(char *filename) {
     struct redisClient *fakeClient;
     FILE *fp = fopen(filename,"r");
