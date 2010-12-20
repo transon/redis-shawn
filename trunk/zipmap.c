@@ -52,13 +52,13 @@
  * <len> lengths are encoded in a single value or in a 5 bytes value.
  * If the first byte value (as an unsigned 8 bit value) is between 0 and
  * 252, it's a single-byte length. If it is 253 then a four bytes unsigned
- * integer follows (in the host byte ordering). A value fo 255 is used to
+ * integer follows (in the host byte ordering). A value of 255 is used to
  * signal the end of the hash. The special value 254 is used to mark
  * empty space that can be used to add new key/value pairs.
  *
  * <free> is the number of free unused bytes
  * after the string, resulting from modification of values associated to a
- * key (for instance if "foo" is set to "bar', and later "foo" will be se to
+ * key (for instance if "foo" is set to "bar', and later "foo" will be set to
  * "hi", I'll have a free byte to use if the value will enlarge again later,
  * or even in order to add a key/value pair if it fits.
  *

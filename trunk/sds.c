@@ -43,6 +43,10 @@ static void sdsOomAbort(void) {
     abort();
 }
 
+/**
+ * alloc the memory for struct sdshdr, copy the data of init
+ * to the new alloc space if init isn't NULL
+ */
 sds sdsnewlen(const void *init, size_t initlen) {
     struct sdshdr *sh;
 
@@ -62,15 +66,25 @@ sds sdsnewlen(const void *init, size_t initlen) {
     return (char*)sh->buf;
 }
 
+/**
+ * alloc the memory only contains header
+ */
 sds sdsempty(void) {
     return sdsnewlen("",0);
 }
 
+/**
+ * if init is NULL, the same as sdsempty
+ */
 sds sdsnew(const char *init) {
     size_t initlen = (init == NULL) ? 0 : strlen(init);
     return sdsnewlen(init, initlen);
 }
 
+/**
+ * s point to the buf in struct sdshdr, so "s - (sizeof(struct sdshdr))"
+ * is buf's header
+ */
 size_t sdslen(const sds s) {
     struct sdshdr *sh = (void*) (s-(sizeof(struct sdshdr)));
     return sh->len;
@@ -90,6 +104,9 @@ size_t sdsavail(sds s) {
     return sh->free;
 }
 
+/**
+ * confirm this method's function
+ */
 void sdsupdatelen(sds s) {
     struct sdshdr *sh = (void*) (s-(sizeof(struct sdshdr)));
     int reallen = strlen(s);

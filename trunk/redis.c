@@ -2599,7 +2599,7 @@ static void replicationFeedMonitors(list *monitors, int dictid, robj **argv, int
 static void processInputBuffer(redisClient *c) {
 again:
     /* Before to process the input buffer, make sure the client is not
-     * waitig for a blocking operation such as BLPOP. Note that the first
+     * waiting for a blocking operation such as BLPOP. Note that the first
      * iteration the client is never blocked, otherwise the processInputBuffer
      * would not be called at all, but after the execution of the first commands
      * in the input buffer the client may be blocked, and the "goto again"
@@ -2724,6 +2724,13 @@ static int listMatchObjects(void *a, void *b) {
     return equalStringObjects(a,b);
 }
 
+/**
+ * after accept the request from client, need create
+ * an object redisClient for it at server side, so it
+ * will communicate with the client use this object.
+ *
+ * callback: readQueryFromClient
+ */
 static redisClient *createClient(int fd) {
     redisClient *c = zmalloc(sizeof(*c));
 
@@ -2768,6 +2775,13 @@ static redisClient *createClient(int fd) {
     return c;
 }
 
+/**
+ * send apply 'obj' to client
+ * register the reply to client event if not exist
+ * add the obj to the tail of reply data list
+ *
+ * callback: sendReplyToClient
+ */
 static void addReply(redisClient *c, robj *obj) {
     if (listLength(c->reply) == 0 &&
         (c->replstate == REDIS_REPL_NONE ||
@@ -2872,6 +2886,10 @@ static void addReplyBulkCString(redisClient *c, char *s) {
     }
 }
 
+/*
+ * the server listening on the server port, when client connect
+ * to the server, the handler is responsible for accept it
+ */
 static void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     int cport, cfd;
     char cip[128];
@@ -2887,8 +2905,8 @@ static void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
     redisLog(REDIS_VERBOSE,"Accepted %s:%d", cip, cport);
     if ((c = createClient(cfd)) == NULL) {
-        redisLog(REDIS_WARNING,"Error allocating resoures for the client");
-        close(cfd); /* May be already closed, just ingore errors */
+        redisLog(REDIS_WARNING,"Error allocating resources for the client");
+        close(cfd); /* May be already closed, just ignore errors */
         return;
     }
     /* If maxclient directive is set and this is one client more... close the

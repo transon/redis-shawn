@@ -463,7 +463,7 @@ dictEntry *dictFind(dict *d, const void *key)
                 return he;
             he = he->next;
         }
-        if (!dictIsRehashing(d)) return NULL;
+        if (!dictIsRehashing(d)) return NULL; // dict not rehashing, end dictFind
     }
     return NULL;
 }
