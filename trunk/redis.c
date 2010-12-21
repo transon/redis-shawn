@@ -1273,8 +1273,8 @@ static void closeTimedoutClients(void) {
         {
             redisLog(REDIS_VERBOSE,"Closing idle client");
             freeClient(c);
-        } else if (c->flags & REDIS_BLOCKED) {
-            if (c->blockingto != 0 && c->blockingto < now) {
+        } else if (c->flags & REDIS_BLOCKED) { // The client is waiting in a blocking operation
+            if (c->blockingto != 0 && c->blockingto < now) { // Blocking operation timeout
                 addReply(c,shared.nullmultibulk);
                 unblockClientWaitingData(c);
             }
@@ -1291,8 +1291,10 @@ static int htNeedsResize(dict *dict) {
             (used*100/size < REDIS_HT_MINFILL));
 }
 
-/* If the percentage of used slots in the HT reaches REDIS_HT_MINFILL
- * we resize the hash table to save memory */
+/*
+ * If the percentage of used slots in the HT reaches REDIS_HT_MINFILL
+ * we resize the hash table to save memory
+ */
 static void tryResizeHashTables(void) {
     int j;
 
@@ -1404,12 +1406,14 @@ cleanup:
     server.bgrewritechildpid = -1;
 }
 
-/* This function is called once a background process of some kind terminates,
+/*
+ * This function is called once a background process of some kind terminates,
  * as we want to avoid resizing the hash tables when there is a child in order
  * to play well with copy-on-write (otherwise when a resize happens lots of
  * memory pages are copied). The goal of this function is to update the ability
  * for dict.c to resize the hash tables accordingly to the fact we have o not
- * running childs. */
+ * running childs.
+ */
 static void updateDictResizePolicy(void) {
     if (server.bgsavechildpid == -1 && server.bgrewritechildpid == -1)
         dictEnableResize();
