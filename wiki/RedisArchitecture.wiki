@@ -78,6 +78,47 @@ appendfilename => appendonly.aof
 
 为aeTimeEvent结构体分配空间，初始化，然后将它放到eventLoop的timeEventHead链表的头，完成对timer event的注册
 }}}
+      * serverCron
+{{{
+参考：dict.c
+}}}
+        * closeTimedoutClients
+{{{
+参考：dict.c
+
+Close connections of timedout clients
+}}}
+        * if
+{{{
+server.bgsavechildpid != -1 || server.bgrewritechildpid != -1
+
+Check if a background saving or AOF rewrite in progress terminated
+
+}}}
+          * backgroundSaveDoneHandler
+{{{
+
+}}}
+          * backgroundRewriteDoneHandler
+{{{
+}}}
+          * updateDictResizePolicy
+{{{
+}}}
+        * else 
+{{{
+If there is not a background saving in progress check if
+we have to save now
+}}}
+          * rdbSaveBackground
+{{{
+参考：redis.c
+}}}
+            * rdbSave
+{{{
+参考：redis.c
+Save the DB on disk
+}}}
     * aeCreateFileEvent
 {{{
 参考：ae.c
