@@ -1264,6 +1264,8 @@ static void closeTimedoutClients(void) {
     listRewind(server.clients,&li);
     while ((ln = listNext(&li)) != NULL) {
         c = listNodeValue(ln);
+
+        // c satisfy the if condition and the flag REDIS_BLOCKED is set?
         if (server.maxidletime &&
             !(c->flags & REDIS_SLAVE) &&    /* no timeout for slaves */
             !(c->flags & REDIS_MASTER) &&   /* no timeout for masters */
@@ -1275,7 +1277,7 @@ static void closeTimedoutClients(void) {
             freeClient(c);
         } else if (c->flags & REDIS_BLOCKED) { // The client is waiting in a blocking operation
             if (c->blockingto != 0 && c->blockingto < now) { // Blocking operation timeout
-                addReply(c,shared.nullmultibulk);
+                addReply(c,shared.nullmultibulk);// sent the shared object to client
                 unblockClientWaitingData(c);
             }
         }
@@ -1285,8 +1287,8 @@ static void closeTimedoutClients(void) {
 static int htNeedsResize(dict *dict) {
     long long size, used;
 
-    size = dictSlots(dict); //  ht[0].size + ht[1].size
-    used = dictSize(dict); //  ht[0].used + ht[1].used
+    size = dictSlots(dict);
+    used = dictSize(dict);
     return (size && used && size > DICT_HT_INITIAL_SIZE &&
             (used*100/size < REDIS_HT_MINFILL));
 }
@@ -1306,12 +1308,10 @@ static void tryResizeHashTables(void) {
     }
 }
 
-/*
- * Our hash table implementation performs rehashing incrementally while
+/* Our hash table implementation performs rehashing incrementally while
  * we write/read from the hash table. Still if the server is idle, the hash
  * table will use two tables for a long time. So we try to use 1 millisecond
- * of CPU time at every serverCron() loop in order to rehash some key.
- */
+ * of CPU time at every serverCron() loop in order to rehash some key. */
 static void incrementallyRehash(void) {
     int j;
 
@@ -1323,10 +1323,7 @@ static void incrementallyRehash(void) {
     }
 }
 
-/*
- * A background saving child (BGSAVE) terminated its work.
- * Handle this.
- */
+/* A background saving child (BGSAVE) terminated its work. Handle this. */
 void backgroundSaveDoneHandler(int statloc) {
     int exitcode = WEXITSTATUS(statloc);
     int bysignal = WIFSIGNALED(statloc);
@@ -1349,10 +1346,8 @@ void backgroundSaveDoneHandler(int statloc) {
     updateSlavesWaitingBgsave(exitcode == 0 ? REDIS_OK : REDIS_ERR);
 }
 
-/*
- * A background append only file rewriting (BGREWRITEAOF) terminated its work.
- * Handle this.
- */
+/* A background append only file rewriting (BGREWRITEAOF) terminated its work.
+ * Handle this. */
 void backgroundRewriteDoneHandler(int statloc) {
     int exitcode = WEXITSTATUS(statloc);
     int bysignal = WIFSIGNALED(statloc);
@@ -1419,7 +1414,7 @@ cleanup:
  * to play well with copy-on-write (otherwise when a resize happens lots of
  * memory pages are copied). The goal of this function is to update the ability
  * for dict.c to resize the hash tables accordingly to the fact we have o not
- * running children.
+ * running childs.
  */
 static void updateDictResizePolicy(void) {
     if (server.bgsavechildpid == -1 && server.bgrewritechildpid == -1)
@@ -2031,11 +2026,13 @@ static void freeClientArgv(redisClient *c) {
 static void freeClient(redisClient *c) {
     listNode *ln;
 
-    /* Note that if the client we are freeing is blocked into a blocking
+    /*
+     * Note that if the client we are freeing is blocked into a blocking
      * call, we have to set querybuf to NULL *before* to call
      * unblockClientWaitingData() to avoid processInputBuffer() will get
      * called. Also it is important to remove the file events after
-     * this, because this call adds the READABLE event. */
+     * this, because this call adds the READABLE event.
+     */
     sdsfree(c->querybuf);
     c->querybuf = NULL;
     if (c->flags & REDIS_BLOCKED)
@@ -2619,14 +2616,12 @@ static void replicationFeedMonitors(list *monitors, int dictid, robj **argv, int
 
 static void processInputBuffer(redisClient *c) {
 again:
-    /*
-     * Before to process the input buffer, make sure the client is not
+    /* Before to process the input buffer, make sure the client is not
      * waiting for a blocking operation such as BLPOP. Note that the first
      * iteration the client is never blocked, otherwise the processInputBuffer
      * would not be called at all, but after the execution of the first commands
      * in the input buffer the client may be blocked, and the "goto again"
-     * will try to reiterate. The following line will make it return asap.
-     */
+     * will try to reiterate. The following line will make it return asap. */
     if (c->flags & REDIS_BLOCKED || c->flags & REDIS_IO_WAIT) return;
     if (c->bulklen == -1) {
         /* Read the first line of the query */
@@ -2701,10 +2696,6 @@ again:
     }
 }
 
-/**
- * read data from socket, then let processInputBuffer deal with the
- * following things
- */
 static void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     redisClient *c = (redisClient*) privdata;
     char buf[REDIS_IOBUF_LEN];
@@ -2764,7 +2755,6 @@ static redisClient *createClient(int fd) {
     anetNonBlock(NULL,fd);
     anetTcpNoDelay(NULL,fd);
     if (!c) return NULL;
-    // If fd is readable, then readQueryFromClient will be called
     if (aeCreateFileEvent(server.el,fd,AE_READABLE,
         readQueryFromClient, c) == AE_ERR)
     {
@@ -2956,21 +2946,6 @@ static void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
 
 /* ======================= Redis objects implementation ===================== */
 
-/**
- * Get the object from free object list first, if there isn't have, then create
- * a new object
- *
- * Let ptr point to different data structure, the means of robj different
- *
- * createStringObject
- * createListObject
- * createSetObject
- * createZsetObject
- * createHashObject
- *
- * ......
- *
- */
 static robj *createObject(int type, void *ptr) {
     robj *o;
 
@@ -3141,10 +3116,6 @@ static void decrRefCount(void *obj) {
     }
 }
 
-/**
- * If the key's value in memory, return it directly, otherwise we need
- * load it back to memory from disk
- */
 static robj *lookupKey(redisDb *db, robj *key) {
     dictEntry *de = dictFind(db->dict,key);
     if (de) {
@@ -3871,6 +3842,7 @@ werr:
 static int rdbSaveBackground(char *filename) {
     pid_t childpid;
 
+    // another dbSaveBackground is running if bgsavechildpid != -1
     if (server.bgsavechildpid != -1) return REDIS_ERR;
     if (server.vm_enabled) waitEmptyIOJobsQueue();
     server.dirty_before_bgsave = server.dirty;
@@ -7758,7 +7730,12 @@ static void blockForKeys(redisClient *c, robj **keys, int numkeys, time_t timeou
     server.blpop_blocked_clients++;
 }
 
-/* Unblock a client that's waiting in a blocking operation such as BLPOP */
+/*
+ * Unblock a client that's waiting in a blocking operation such as BLPOP
+ *
+ * Remove the blocked key from blockingkeys and free the space of blockingkeys
+ * Process data in the input buffer
+ */
 static void unblockClientWaitingData(redisClient *c) {
     dictEntry *de;
     list *l;
@@ -8267,7 +8244,7 @@ static void slaveofCommand(redisClient *c) {
 /* ============================ Maxmemory directive  ======================== */
 
 /*
- * Try to free one object form the pre-allocated objects free list.
+ * Try to free one object from the pre-allocated objects free list.
  * This is useful under low mem conditions as by default we take 1 million
  * free objects allocated. On success REDIS_OK is returned, otherwise
  * REDIS_ERR.
@@ -8905,27 +8882,6 @@ static void aofRemoveTempFile(pid_t childpid) {
     unlink(tmpfile);
 }
 
-/* Virtual Memory is composed mainly of two subsystems:
- * - Blocking Virutal Memory
- * - Threaded Virtual Memory I/O
- * The two parts are not fully decoupled, but functions are split among two
- * different sections of the source code (delimited by comments) in order to
- * make more clear what functionality is about the blocking VM and what about
- * the threaded (not blocking) VM.
- *
- * Redis VM design:
- *
- * Redis VM is a blocking VM (one that blocks reading swapped values from
- * disk into memory when a value swapped out is needed in memory) that is made
- * unblocking by trying to examine the command argument vector in order to
- * load in background values that will likely be needed in order to exec
- * the command. The command is executed only once all the relevant keys
- * are loaded into memory.
- *
- * This basically is almost as simple of a blocking VM, but almost as parallel
- * as a fully non-blocking VM.
- */
-
 /* Called when the user switches from "appendonly yes" to "appendonly no"
  * at runtime using the CONFIG command. */
 static void stopAppendOnly(void) {
@@ -8969,6 +8925,26 @@ static int startAppendOnly(void) {
 }
 
 /* =================== Virtual Memory - Blocking Side  ====================== */
+/* Virtual Memory is composed mainly of two subsystems:
+ * - Blocking Virutal Memory
+ * - Threaded Virtual Memory I/O
+ * The two parts are not fully decoupled, but functions are split among two
+ * different sections of the source code (delimited by comments) in order to
+ * make more clear what functionality is about the blocking VM and what about
+ * the threaded (not blocking) VM.
+ *
+ * Redis VM design:
+ *
+ * Redis VM is a blocking VM (one that blocks reading swapped values from
+ * disk into memory when a value swapped out is needed in memory) that is made
+ * unblocking by trying to examine the command argument vector in order to
+ * load in background values that will likely be needed in order to exec
+ * the command. The command is executed only once all the relevant keys
+ * are loaded into memory.
+ *
+ * This basically is almost as simple of a blocking VM, but almost as parallel
+ * as a fully non-blocking VM.
+ */
 
 static void vmInit(void) {
     off_t totsize;
