@@ -2946,6 +2946,12 @@ static void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
 
 /* ======================= Redis objects implementation ===================== */
 
+/**
+ * get object from free list first, if isn't exist, then malloc directly
+ *
+ * type is the type of ptr
+ * ptr point to the data
+ */
 static robj *createObject(int type, void *ptr) {
     robj *o;
 
@@ -2968,19 +2974,30 @@ static robj *createObject(int type, void *ptr) {
     o->ptr = ptr;
     o->refcount = 1;
     if (server.vm_enabled) {
-        /* Note that this code may run in the context of an I/O thread
+        /*
+         * Note that this code may run in the context of an I/O thread
          * and accessing to server.unixtime in theory is an error
          * (no locks). But in practice this is safe, and even if we read
-         * garbage Redis will not fail, as it's just a statistical info */
+         * garbage Redis will not fail, as it's just a statistical info
+         */
         o->vm.atime = server.unixtime;
         o->storage = REDIS_VM_MEMORY;
     }
     return o;
 }
 
+/**
+ * type is REDIS_STRING, encoding is REDIS_ENCODING_RAW
+ */
 static robj *createStringObject(char *ptr, size_t len) {
     return createObject(REDIS_STRING,sdsnewlen(ptr,len));
 }
+
+/**
+ * 0        <= value < REDIS_SHARED_INTEGERS: type is REDIS_STRINGm encoding is REDIS_ENCODING_INT
+ * LONG_MIN <= value <= LONG_MAX: type is REDIS_STRING, encoding is REDIS_ENCODING_INT
+ *             others : type is REDIS_STRING, encoding is REDIS_ENCODING_RAW
+ */
 
 static robj *createStringObjectFromLongLong(long long value) {
     robj *o;
@@ -3000,11 +3017,18 @@ static robj *createStringObjectFromLongLong(long long value) {
     return o;
 }
 
+/**
+ * o is a string object, so its encoding should be REDIS_ENCODING_RAW
+ */
 static robj *dupStringObject(robj *o) {
     assert(o->encoding == REDIS_ENCODING_RAW);
     return createStringObject(o->ptr,sdslen(o->ptr));
 }
 
+/**
+ * type is REDIS_LIST
+ * encoding is REDIS_ENCODING_RAW
+ */
 static robj *createListObject(void) {
     list *l = listCreate();
 
@@ -3012,11 +3036,19 @@ static robj *createListObject(void) {
     return createObject(REDIS_LIST,l);
 }
 
+/**
+ * type is REDIS_SET
+ * encoding is REDIS_ENCODING_RAW
+ */
 static robj *createSetObject(void) {
     dict *d = dictCreate(&setDictType,NULL);
     return createObject(REDIS_SET,d);
 }
 
+/**
+ * type is REDIS_HASH
+ * encoding is REDIS_ENCODING_ZIPMAP
+ */
 static robj *createHashObject(void) {
     /* All the Hashes start as zipmaps. Will be automatically converted
      * into hash tables if there are enough elements or big elements
@@ -3027,6 +3059,10 @@ static robj *createHashObject(void) {
     return o;
 }
 
+/**
+ * type is REDIS_ZSET
+ * encoding is REDIS_ENCODING_RAW
+ */
 static robj *createZsetObject(void) {
     zset *zs = zmalloc(sizeof(*zs));
 
@@ -3035,6 +3071,9 @@ static robj *createZsetObject(void) {
     return createObject(REDIS_ZSET,zs);
 }
 
+/**
+ * string object's encoding is REDIS_ENCODING_RAW
+ */
 static void freeStringObject(robj *o) {
     if (o->encoding == REDIS_ENCODING_RAW) {
         sdsfree(o->ptr);
