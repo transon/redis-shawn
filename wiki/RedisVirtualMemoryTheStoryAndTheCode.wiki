@@ -1,5 +1,4 @@
 #labels vm
-{{{
 If you are reading this article probably you already know it: Redis is an in-memory DB. It's persistent, as it's disk backed, but disk is only used to persist, all the data is taken in the computer RAM.
 
 I think the last few months showed that this was not a bad design decision. Redis proved to be very fast in real-world scenarios where there is to scale an unhealthy amount of writes, and it is supporting advanced features like Sorted Sets, and many other complex atomic operations, just because it is in memory, and single threaded. In other words, some of the features supported by Redis tend to be very complex to implement if there is to organize data on disk for fast access, and there are many concurrent threads accessing this data. The Redis design made this two problems a non issue, with the drawback of holding data in memory.
@@ -92,7 +91,7 @@ Still too complex
 The actual implementation is much more complex than that as you can guess. What happens if a value is being swapped off by an I/O thread while a client is accessing it? And so forth. There was to design the system so that I/O operations can be invalidated at any time, and this was tricky.
 
 After the VM, I lost my feeling that Redis was trivial to gasp by the casual coder just reading the source code. Now it's 13k lines of code and there are many things to understand. Some functions are a few lines, but there are a lot of comments just to explain what's going on. Just an example, from the function in charge of jobs invalidation:
-
+{{{
                 switch(i) {
                 case 0: /* io_newjobs */
                     /* If the job was yet not processed the best thing to do
@@ -128,11 +127,10 @@ After the VM, I lost my feeling that Redis was trivial to gasp by the casual cod
                     break;
                 }
 
-
+}}}
 
 (Nazi Grammar Is Not Happy, I know). The complexity is self contained, but still there are a number of non trivial issues to understand for an external programmer in order to hack with the VM.
 
 Fortunately the VM needs very little maintenance work, as the trick of using the same serialization format used to persiste on disk completely decoupled it from the other Redis subsystems. Want to implement a new type for Redis? Just write the commands to work with this new type and the functions to load/save it in the .rdb file and you are done. The VM will do the rest without your help.
 
 Ok this article is already too long. I hope that Redis 2.0.0 will be released as stable code in two or three months at max. The VM needs a few more weeks of work and testing, but now it is working well and I encourage you to give it a try in development environment if you think you'll run out of memory in short time without it ;) 
-}}}
