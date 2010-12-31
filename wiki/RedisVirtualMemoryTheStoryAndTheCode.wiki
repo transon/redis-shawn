@@ -147,3 +147,35 @@ IO thread entry, it is a worker, so it will get the iojob from queue - io_newjob
  # According the iojob type decide the things to do, if the type is "REDIS_IOJOB_LOAD", then it will call "vmReadObjectFromSwap -> rdbLoadObject" to read the object from swap file; if the type is "REDIS_IOJOB_PREPARE_SWAP", then it will call "rdbSavedObjectPages" to calculate the number of pages which used to store the object; if the type is "REDIS_IOJOB_DO_SWAP", then it will call "vmWriteObjectOnSwap" to write the object to swap file.
  # Move the iojob from io_processing to io_processed
  # Signal the main thread through write a character X to pipe "io_ready_pipe_write"
+
+vmThreadedIOCompletedJob
+
+What's the functional of it?
+
+Every time a thread finished a job, it writes a byte 'x' from the write side of an unix pipe in order to "awake" the main thread, then this function is called.
+
+Who will call it?
+
+1) vmInit -> aeCreateFileEvent -> vmThreadedIOCompletedJob
+2) waitEmptyIOJobsQueue -> vmThreadedIOCompletedJob
+
+How it was implement?
+
+For every byte we read from the read side of the pipe, there is one I/O job completed to process, so it will loop read the read side of the pipe, get the first job from queue - io_processed, if the job is marked as canceled, just ignore it, then if the type of job is "REDIS_IOJOB_LOAD", changed the status of the key, e.g.: set key->storage = REDIS_VM_MEMORY, it says that that key has been loaded from disk to memory, so we can call handleClientsBlockedOnSwappedKey to handle the clients which waiting for this key to be loaded; if the type of job is "REDIS_IOJOB_PREPARE_SWAP", we call vmFindContiguousPages to get the amount of pages required to swap this object, only when there isn't background child process (BGSAVE, BGAEOREWRITE) and get the swap pages success, we change the type of job to REDIS_IOJOB_DO_SWAP and call queueIOjob to insert it into io_newjobs; if the type of job is "REDIS_IOJOB_DO_SWAP", change the status of the key, e.g.: key->storage = REDIS_VM_SWAPPED, put a few more swap requests in queue if we are still out of memory through calling vmSwapOneObjectThreaded.
+
+vmCancelThreadedIOJob
+
+What's the functional of it?
+
+Remove the specified object from the threaded I/O queue if still not
+processed, otherwise make sure to flag it as canceled.
+
+Who will call it?
+
+vmLoadObject -> vmCancelThreadedIOJob (If we are loading the object in background, stop it, we need to load this object synchronously ASAP.)
+
+waitForSwappedKey -> vmCancelThreadedIOJob (The client is just request the swapping key, so we need cancel the swapping)
+
+How it was implement?
+
+First the type of cancel iojob should be REDIS_VM_LOADING or REDIS_VM_SWAPPING, because the iojob maybe exist in three queue - io_newjobs, io_processing or io_processed, so we need search for a matching key in each of the queue, if the iojob was cancel, we continue to check the next one; if we get the job which key is equal to the search key, then mark the pages as free since the swap didn't happened or happened but is noew discarded, if the iojob was in io_newjobs, we only need free the job, remove it from list; if the iojob was in io_processing, we need sleep and try again; if the iojob was in io_processed, the job was alread processed, just mark it as canceld so that we will ignore it when processing completed jobs. Finally we have to adjust the storage type of the object in order to "UNDO" the operation, e.g.: REDIS_VM_LOADING -> REDIS_VM_SWAPPED, REDIS_VM_SWAPPING -> REDIS_VM_MEMORY
