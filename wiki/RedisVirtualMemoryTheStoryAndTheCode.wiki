@@ -134,3 +134,15 @@ After the VM, I lost my feeling that Redis was trivial to gasp by the casual cod
 Fortunately the VM needs very little maintenance work, as the trick of using the same serialization format used to persiste on disk completely decoupled it from the other Redis subsystems. Want to implement a new type for Redis? Just write the commands to work with this new type and the functions to load/save it in the .rdb file and you are done. The VM will do the rest without your help.
 
 Ok this article is already too long. I hope that Redis 2.0.0 will be released as stable code in two or three months at max. The VM needs a few more weeks of work and testing, but now it is working well and I encourage you to give it a try in development environment if you think you'll run out of memory in short time without it ;) 
+
+-------------代码分析分割线--------------
+每一个IO thread都是通过如下流程创建的，线程入口是IOThreadEntryPoint:
+
+queueIOJob (This function must be called while with threaded IO locked) -> spawnIOThread -> IOThreadEntryPoint
+
+IO thread entry, it is a worker, so it will get the iojob from queue - io_newjobs to process it.
+
+1) Move the iojob from io_newjobs to io_processing
+2) According the iojob type decide the things to do, if the type is "REDIS_IOJOB_LOAD", then it will call "vmReadObjectFromSwap -> rdbLoadObject" to read the object from swap file; if the type is "REDIS_IOJOB_PREPARE_SWAP", then it will call "rdbSavedObjectPages" to calculate the number of pages which used to store the object; if the type is "REDIS_IOJOB_DO_SWAP", then it will call "vmWriteObjectOnSwap" to write the object to swap file.
+3) Move the iojob from io_processing to io_processed
+4) Signal the main thread through write a character X to pipe "io_ready_pipe_write"
