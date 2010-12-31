@@ -214,7 +214,66 @@ Call writev to send multi-buf data
 {{{
 参考：adlist.c
 }}}
+    * vmInit
+{{{
+参考：adlist.c
+Initial the following fields in redisServer
 
+    /* Virtual memory state */
+    FILE *vm_fp;
+    int vm_fd;
+    off_t vm_next_page; /* Next probably empty page */
+    off_t vm_near_pages; /* Number of pages allocated sequentially */
+    unsigned char *vm_bitmap; /* Bitmap of free/used pages */
+    time_t unixtime;    /* Unix time sampled every second. */
+    /* Virtual memory I/O threads stuff */
+    /* An I/O thread process an element taken from the io_newjobs queue and
+     * put the result of the operation in the io_processed list. While the
+     * job is being processed, it's put on io_processing queue. */
+    list *io_newjobs; /* List of VM I/O jobs yet to be processed */
+    list *io_processing; /* List of VM I/O jobs being processed */
+    list *io_processed; /* List of VM I/O jobs already processed */
+    list *io_ready_clients; /* Clients ready to be unblocked. All keys loaded */
+    pthread_mutex_t io_mutex; /* lock to access io_jobs/io_done/io_thread_job */
+    pthread_mutex_t obj_freelist_mutex; /* safe redis objects creation/free */
+    pthread_mutex_t io_swapfile_mutex; /* So we can lseek + write */
+    pthread_attr_t io_threads_attr; /* attributes for threads creation */
+    int io_active_threads; /* Number of running I/O threads */
+    int vm_max_threads; /* Max number of I/O threads running at the same time */
+    /* Our main thread is blocked on the event loop, locking for sockets ready
+     * to be read or written, so when a threaded I/O operation is ready to be
+     * processed by the main thread, the I/O thread will use a unix pipe to
+     * awake the main thread. The followings are the two pipe FDs. */
+    int io_ready_pipe_read;
+    int io_ready_pipe_write;
+    /* Virtual memory stats */
+    unsigned long long vm_stats_used_pages;
+    unsigned long long vm_stats_swapped_objects;
+    unsigned long long vm_stats_swapouts;
+    unsigned long long vm_stats_swapins;
+}}}
+      * aeCreateFileEvent
+{{{
+Create the file event for io_ready_pipe_read, the callback 
+is vmThreadIOCompletedJob, so when the io_read_pipe_read
+readable, the callback will be called. 
+}}}
+        * vmThreadedIOCompletedJob 
+{{{
+/*
+ * Every time a thread finished a Job, it writes a byte into the write side
+ * of an unix pipe in order to "awake" the main thread, and this function
+ * is called.
+ *
+ * Note that this is called both by the event loop, when a I/O thread
+ * sends a byte in the notification pipe, and is also directly called from
+ * waitEmptyIOJobsQueue().
+ *
+ * In the latter case we don't want to swap more, so we use the
+ * "privdata" argument setting it to a not NULL value to signal this
+ * condition.
+ */
+}}}
   * loadAppendOnlyFile
 {{{
 参考:redis.c
