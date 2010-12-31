@@ -419,8 +419,8 @@ struct redisServer {
     unsigned char *vm_bitmap; /* Bitmap of free/used pages */
     time_t unixtime;    /* Unix time sampled every second. */
     /* Virtual memory I/O threads stuff */
-    /* An I/O thread process an element taken from the io_jobs queue and
-     * put the result of the operation in the io_done list. While the
+    /* An I/O thread process an element taken from the io_newjobs queue and
+     * put the result of the operation in the io_processed list. While the
      * job is being processed, it's put on io_processing queue. */
     list *io_newjobs; /* List of VM I/O jobs yet to be processed */
     list *io_processing; /* List of VM I/O jobs being processed */
@@ -2129,6 +2129,15 @@ static void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask)
     REDIS_NOTUSED(mask);
 
     /* Use writev() if we have enough buffers to send */
+
+    /**
+     * Using writev:
+     *
+     * glueoutputbuf = 0
+     * c->flags & REDIS_MASTER = 0
+     * length(c->reply) > THRESHOLD
+     *
+     */
     if (!server.glueoutputbuf &&
         listLength(c->reply) > REDIS_WRITEV_THRESHOLD &&
         !(c->flags & REDIS_MASTER))
@@ -2153,21 +2162,31 @@ static void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask)
             /* Don't reply to a master */
             nwritten = objlen - c->sentlen;
         } else {
+            /**
+             * The send data start at "ptr + sentlen"
+             * The max length of data is "objlen -sentlen"
+             */
             nwritten = write(fd, ((char*)o->ptr)+c->sentlen, objlen - c->sentlen);
             if (nwritten <= 0) break;
         }
         c->sentlen += nwritten;
         totwritten += nwritten;
-        /* If we fully sent the object on head go to the next one */
+        /*
+         * If we fully sent the object on head go to the next one
+         *
+         * otherwise it will be sent the left data again
+         */
         if (c->sentlen == objlen) {
             listDelNode(c->reply,listFirst(c->reply));
-            c->sentlen = 0;
+            c->sentlen = 0; // send one reply completely done
         }
-        /* Note that we avoid to send more thank REDIS_MAX_WRITE_PER_EVENT
+        /*
+         * Note that we avoid to send more thank REDIS_MAX_WRITE_PER_EVENT
          * bytes, in a single threaded server it's a good idea to serve
          * other clients as well, even if a very large request comes from
          * super fast link that is always able to accept data (in real world
-         * scenario think about 'KEYS *' against the loopback interfae) */
+         * scenario think about 'KEYS *' against the loopback interfae)
+         */
         if (totwritten > REDIS_MAX_WRITE_PER_EVENT) break;
     }
     if (nwritten == -1) {
@@ -2180,8 +2199,14 @@ static void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask)
             return;
         }
     }
+    /**
+     * record the last interaction time
+     */
     if (totwritten > 0) c->lastinteraction = time(NULL);
     if (listLength(c->reply) == 0) {
+        /**
+         * all of reply have been sent to the client, so delete the file event
+         */
         c->sentlen = 0;
         aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);
     }
@@ -2199,7 +2224,7 @@ static void sendReplyToClientWritev(aeEventLoop *el, int fd, void *privdata, int
 
     listNode *node;
     while (listLength(c->reply)) {
-        offset = c->sentlen;
+        offset = c->sentlen; // handle the first partial obj
         ion = 0;
         willwrite = 0;
 
@@ -2217,7 +2242,7 @@ static void sendReplyToClientWritev(aeEventLoop *el, int fd, void *privdata, int
             iov[ion].iov_base = ((char*)o->ptr) + offset;
             iov[ion].iov_len = objlen - offset;
             willwrite += objlen - offset;
-            offset = 0; /* just for the first item */
+            offset = 0; /* non-zero just for the first item */
             ion++;
         }
 
@@ -3498,11 +3523,13 @@ static int rdbSaveLen(FILE *fp, uint32_t len) {
     return 0;
 }
 
-/* Encode 'value' as an integer if possible (if integer will fit the
- * supported range). If the function sucessful encoded the integer
+/*
+ * Encode 'value' as an integer if possible (if integer will fit the
+ * supported range). If the function successful encoded the integer
  * then the (up to 5 bytes) encoded representation is written in the
  * string pointed by 'enc' and the length is returned. Otherwise
- * 0 is returned. */
+ * 0 is returned.
+ */
 static int rdbEncodeInteger(long long value, unsigned char *enc) {
     /* Finally check if it fits in our ranges */
     if (value >= -(1<<7) && value <= (1<<7)-1) {
@@ -3608,8 +3635,10 @@ static int rdbSaveRawString(FILE *fp, unsigned char *s, size_t len) {
 static int rdbSaveStringObject(FILE *fp, robj *obj) {
     int retval;
 
-    /* Avoid to decode the object, then encode it again, if the
-     * object is alrady integer encoded. */
+    /*
+     * Avoid to decode the object, then encode it again, if the
+     * object is already integer encoded.
+     */
     if (obj->encoding == REDIS_ENCODING_INT) {
         long val = (long) obj->ptr;
         unsigned char buf[5];
@@ -3619,7 +3648,7 @@ static int rdbSaveStringObject(FILE *fp, robj *obj) {
             if (fwrite(buf,enclen,1,fp) == 0) return -1;
             return 0;
         }
-        /* otherwise... fall throught and continue with the usual
+        /* otherwise... fall through and continue with the usual
          * code path. */
     }
 
@@ -3778,7 +3807,11 @@ static off_t rdbSavedObjectPages(robj *o, FILE *fp) {
     return (bytes+(server.vm_page_size-1))/server.vm_page_size;
 }
 
-/* Save the DB on disk. Return REDIS_ERR on error, REDIS_OK on success */
+/*
+ * Save the DB on disk. Return REDIS_ERR on error, REDIS_OK on success
+ *
+ * snapshot entry
+ */
 static int rdbSave(char *filename) {
     dictIterator *di = NULL;
     dictEntry *de;
@@ -3787,9 +3820,11 @@ static int rdbSave(char *filename) {
     int j;
     time_t now = time(NULL);
 
-    /* Wait for I/O therads to terminate, just in case this is a
+    /*
+     * Wait for I/O threads to terminate, just in case this is a
      * foreground-saving, to avoid seeking the swap file descriptor at the
-     * same time. */
+     * same time.
+     */
     if (server.vm_enabled)
         waitEmptyIOJobsQueue();
 
@@ -3799,6 +3834,25 @@ static int rdbSave(char *filename) {
         redisLog(REDIS_WARNING, "Failed saving the DB: %s", strerror(errno));
         return REDIS_ERR;
     }
+
+    /**
+     * open rdb
+     *
+     * REDIS0001
+     *
+     * loop into each dict db
+     *     write the SELECT DB opcode (type, len)
+     *     loop into each dict entry
+     *         save expire time (type, time)
+     *         save type, key, value (REDIS_VM_MEMORY, REDIS_VM_SWAPPING, REDIS_VM_SWAPPED, REDIS_VM_LOADING)
+     * EOF opcode
+     *
+     * flush rdb
+     *
+     * close rdb
+     *
+     * rename rdb
+     */
     if (fwrite("REDIS0001",9,1,fp) == 0) goto werr;
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
@@ -3832,14 +3886,14 @@ static int rdbSave(char *filename) {
             if (!server.vm_enabled || key->storage == REDIS_VM_MEMORY ||
                                       key->storage == REDIS_VM_SWAPPING) {
                 /* Save type, key, value */
-                if (rdbSaveType(fp,o->type) == -1) goto werr;
-                if (rdbSaveStringObject(fp,key) == -1) goto werr;
-                if (rdbSaveObject(fp,o) == -1) goto werr;
+                if (rdbSaveType(fp,o->type) == -1) goto werr; // save type
+                if (rdbSaveStringObject(fp,key) == -1) goto werr; //  save key
+                if (rdbSaveObject(fp,o) == -1) goto werr; // save value
             } else {
                 /* REDIS_VM_SWAPPED or REDIS_VM_LOADING */
                 robj *po;
                 /* Get a preview of the object in memory */
-                po = vmPreviewObject(key);
+                po = vmPreviewObject(key); // load the value on disk
                 /* Save type, key, value */
                 if (rdbSaveType(fp,key->vtype) == -1) goto werr;
                 if (rdbSaveStringObject(fp,key) == -1) goto werr;
@@ -4171,7 +4225,7 @@ static int rdbLoad(char *filename) {
 
     fp = fopen(filename,"r");
     if (!fp) return REDIS_ERR;
-    if (fread(buf,9,1,fp) == 0) goto eoferr;
+    if (fread(buf,9,1,fp) == 0) goto eoferr; // REDIS0001
     buf[9] = '\0';
     if (memcmp(buf,"REDIS",5) != 0) {
         fclose(fp);
@@ -8354,7 +8408,7 @@ static void freeMemoryIfNeeded(void) {
 /* Write the append only file buffer on disk.
  *
  * Since we are required to write the AOF before replying to the client,
- * and the only way the client socket can get a write is entering when the
+ * and the only way the client socket can get a write is entering the
  * the event loop, we accumulate all the AOF writes in a memory
  * buffer and write it on disk using this function just before entering
  * the event loop again. */
@@ -8469,6 +8523,11 @@ static void feedAppendOnlyFile(struct redisCommand *cmd, int dictid, robj **argv
      * accumulate the differences between the child DB and the current one
      * in a buffer, so that when the child process will do its work we
      * can append the differences to the new append only file. */
+
+    /**
+     * when the child process finish the append only file, then the parent process
+     * will append bgrewritebuf to append only file
+     */
     if (server.bgrewritechildpid != -1)
         server.bgrewritebuf = sdscatlen(server.bgrewritebuf,buf,sdslen(buf));
 
@@ -8965,7 +9024,7 @@ static int startAppendOnly(void) {
 
 /* =================== Virtual Memory - Blocking Side  ====================== */
 /* Virtual Memory is composed mainly of two subsystems:
- * - Blocking Virutal Memory
+ * - Blocking Virtual Memory
  * - Threaded Virtual Memory I/O
  * The two parts are not fully decoupled, but functions are split among two
  * different sections of the source code (delimited by comments) in order to
@@ -9188,7 +9247,14 @@ static int vmFindContiguousPages(off_t *first, off_t n) {
     return REDIS_ERR;
 }
 
-/* Write the specified object at the specified page of the swap file */
+/*
+ * Write the specified object at the specified page of the swap file
+ *
+ * IO thread entry will call it
+ *
+ * IOThreadEntryPoint
+ * vmSwapObjectBlocking
+ */
 static int vmWriteObjectOnSwap(robj *o, off_t page) {
     if (server.vm_enabled) pthread_mutex_lock(&server.io_swapfile_mutex);
     if (fseeko(server.vm_fp,page*server.vm_page_size,SEEK_SET) == -1) {
@@ -9204,10 +9270,12 @@ static int vmWriteObjectOnSwap(robj *o, off_t page) {
     return REDIS_OK;
 }
 
-/* Swap the 'val' object relative to 'key' into disk. Store all the information
+/**
+ * Swap the 'val' object relative to 'key' into disk. Store all the information
  * needed to later retrieve the object into the key object.
  * If we can't find enough contiguous empty pages to swap the object on disk
- * REDIS_ERR is returned. */
+ * REDIS_ERR is returned.
+ */
 static int vmSwapObjectBlocking(robj *key, robj *val) {
     off_t pages = rdbSavedObjectPages(val,NULL);
     off_t page;
@@ -9230,6 +9298,11 @@ static int vmSwapObjectBlocking(robj *key, robj *val) {
     return REDIS_OK;
 }
 
+/**
+ * a wrapper which used to load the object from disk to memory
+ *
+ * IO thread entry will call it
+ */
 static robj *vmReadObjectFromSwap(off_t page, int type) {
     robj *o;
 
@@ -9274,19 +9347,25 @@ static robj *vmGenericLoadObject(robj *key, int preview) {
     return val;
 }
 
-/* Plain object loading, from swap to memory */
+/**
+ * Plain object loading, from swap to memory
+ */
 static robj *vmLoadObject(robj *key) {
-    /* If we are loading the object in background, stop it, we
-     * need to load this object synchronously ASAP. */
+    /**
+     * If we are loading the object in background, stop it, we
+     * need to load this object synchronously ASAP.
+     */
     if (key->storage == REDIS_VM_LOADING)
         vmCancelThreadedIOJob(key);
     return vmGenericLoadObject(key,0);
 }
 
-/* Just load the value on disk, without to modify the key.
+/*
+ * Just load the value on disk, without to modify the key.
  * This is useful when we want to perform some operation on the value
  * without to really bring it from swap to memory, like while saving the
- * dataset or rewriting the append only log. */
+ * dataset or rewriting the append only log.
+ */
 static robj *vmPreviewObject(robj *key) {
     return vmGenericLoadObject(key,1);
 }
@@ -9390,12 +9469,14 @@ static double computeObjectSwappability(robj *o) {
     return (double)age*log(1+asize);
 }
 
-/* Try to swap an object that's a good candidate for swapping.
+/**
+ * Try to swap an object that's a good candidate for swapping.
  * Returns REDIS_OK if the object was swapped, REDIS_ERR if it's not possible
  * to swap any object at all.
  *
  * If 'usethreaded' is true, Redis will try to swap the object in background
- * using I/O threads. */
+ * using I/O threads.
+ */
 static int vmSwapOneObject(int usethreads) {
     int j, i;
     struct dictEntry *best = NULL;
@@ -9476,7 +9557,7 @@ static int vmSwapOneObjectThreaded() {
 
 /* Return true if it's safe to swap out objects in a given moment.
  * Basically we don't want to swap objects out while there is a BGSAVE
- * or a BGAEOREWRITE running in backgroud. */
+ * or a BGAEOREWRITE running in background. */
 static int vmCanSwapOut(void) {
     return (server.bgsavechildpid == -1 && server.bgrewritechildpid == -1);
 }
@@ -9508,7 +9589,8 @@ static void freeIOJob(iojob *j) {
     zfree(j);
 }
 
-/* Every time a thread finished a Job, it writes a byte into the write side
+/*
+ * Every time a thread finished a Job, it writes a byte into the write side
  * of an unix pipe in order to "awake" the main thread, and this function
  * is called.
  *
@@ -9518,7 +9600,8 @@ static void freeIOJob(iojob *j) {
  *
  * In the latter case we don't want to swap more, so we use the
  * "privdata" argument setting it to a not NULL value to signal this
- * condition. */
+ * condition.
+ */
 static void vmThreadedIOCompletedJob(aeEventLoop *el, int fd, void *privdata,
             int mask)
 {
@@ -9664,8 +9747,10 @@ static void unlockThreadedIO(void) {
     pthread_mutex_unlock(&server.io_mutex);
 }
 
-/* Remove the specified object from the threaded I/O queue if still not
- * processed, otherwise make sure to flag it as canceled. */
+/*
+ * Remove the specified object from the threaded I/O queue if still not
+ * processed, otherwise make sure to flag it as canceled.
+ */
 static void vmCancelThreadedIOJob(robj *o) {
     list *lists[3] = {
         server.io_newjobs,      /* 0 */
@@ -9745,11 +9830,22 @@ again:
     assert(1 != 1); /* We should never reach this */
 }
 
+/**
+ * IO thread entry, it is a worker, so it will get the iojob from
+ * queue - io_newjobs to process it.
+ *
+ * When the thread finished the iojob, then end, but why not use thread pool?
+ */
 static void *IOThreadEntryPoint(void *arg) {
     iojob *j;
     listNode *ln;
     REDIS_NOTUSED(arg);
-
+    /**
+     * put the thread th in the detached state. This guarantees that the memory
+     * resources consumed by th will be freed immediately when th terminates.
+     * However, this prevents other threads from synchronizing on the termination
+     * of th using pthread_join.
+     */
     pthread_detach(pthread_self());
     while(1) {
         /* Get a new job to process */
@@ -9818,8 +9914,16 @@ static void spawnIOThread(void) {
     server.io_active_threads++;
 }
 
-/* We need to wait for the last thread to exit before we are able to
- * fork() in order to BGSAVE or BGREWRITEAOF. */
+/*
+ * We need to wait for the last thread to exit before we are able to
+ * fork() in order to BGSAVE or BGREWRITEAOF.
+ *
+ * So if we want to start BGSAVE and BGREWRITEAOF, it will confirm all the IO
+ * threads have been done
+ *
+ * vmThreadedIOCompletedJob will be called at two places, one is at here, another
+ * is the callback of write pipe
+ */
 static void waitEmptyIOJobsQueue(void) {
     while(1) {
         int io_processed_len;
@@ -9833,7 +9937,7 @@ static void waitEmptyIOJobsQueue(void) {
             return;
         }
         /* While waiting for empty jobs queue condition we post-process some
-         * finshed job, as I/O threads may be hanging trying to write against
+         * finished job, as I/O threads may be hanging trying to write against
          * the io_ready_pipe_write FD but there are so much pending jobs that
          * it's blocking. */
         io_processed_len = listLength(server.io_processed);
@@ -9848,6 +9952,10 @@ static void waitEmptyIOJobsQueue(void) {
     }
 }
 
+/**
+ * rdbSaveBackground and rewriteAppendOnlyFileBackground
+ * will call this method
+ */
 static void vmReopenSwapFile(void) {
     /* Note: we don't close the old one as we are in the child process
      * and don't want to mess at all with the original file object. */
@@ -9860,7 +9968,14 @@ static void vmReopenSwapFile(void) {
     server.vm_fd = fileno(server.vm_fp);
 }
 
-/* This function must be called while with threaded IO locked */
+/**
+ * This function must be called while with threaded IO locked
+ * Multi-thread will insert job into list, so we need lock the list first
+ *
+ * Call trace:
+ *
+ * queueIOJob -> spawnIOThread -> IOThreadEntryPoint
+ */
 static void queueIOJob(iojob *j) {
     redisLog(REDIS_DEBUG,"Queued IO Job %p type %d about key '%s'\n",
         (void*)j, j->type, (char*)j->key->ptr);
@@ -9869,6 +9984,11 @@ static void queueIOJob(iojob *j) {
         spawnIOThread();
 }
 
+/**
+ * the iojob type was changed to REDIS_IOJOB_PREPARE_SWAP
+ *
+ * storage: REDIS_VM_MEMORY -> REDIS_VM_SWAPPING
+ */
 static int vmSwapObjectThreaded(robj *key, robj *val, redisDb *db) {
     iojob *j;
 
@@ -9885,6 +10005,9 @@ static int vmSwapObjectThreaded(robj *key, robj *val, redisDb *db) {
     j->thread = (pthread_t) -1;
     key->storage = REDIS_VM_SWAPPING;
 
+    /**
+     * lock/unlock the io_mutex when call queueIOoJob
+     */
     lockThreadedIO();
     queueIOJob(j);
     unlockThreadedIO();
@@ -9893,8 +10016,8 @@ static int vmSwapObjectThreaded(robj *key, robj *val, redisDb *db) {
 
 /* ============ Virtual Memory - Blocking clients on missing keys =========== */
 
-/* This function makes the clinet 'c' waiting for the key 'key' to be loaded.
- * If there is not already a job loading the key, it is craeted.
+/* This function makes the client 'c' waiting for the key 'key' to be loaded.
+ * If there is not already a job loading the key, it is created.
  * The key is added to the io_keys list in the client structure, and also
  * in the hash table mapping swapped keys to waiting clients, that is,
  * server.io_waited_keys. */
@@ -9917,6 +10040,8 @@ static int waitForSwappedKey(redisClient *c, robj *key) {
     }
 
     /* OK: the key is either swapped, or being loaded just now. */
+
+    /* REDIS_VM_SWAPPED, REDIS_VM_LOADING*/
 
     /* Add the key to the list of keys this client is waiting for.
      * This maps clients to keys they are waiting for. */
@@ -10040,10 +10165,17 @@ static int blockClientOnSwappedKeys(redisClient *c, struct redisCommand *cmd) {
     }
 }
 
-/* Remove the 'key' from the list of blocked keys for a given client.
+/**
+ * Remove the 'key' from the list of blocked keys for a given client.
  *
  * The function returns 1 when there are no longer blocking keys after
- * the current one was removed (and the client can be unblocked). */
+ * the current one was removed (and the client can be unblocked).
+ *
+ * it will be called by handleClientsBlockedOnSwappedKey
+ *
+ * 1) remove the key from io_keys
+ * 2) unmap the key -> client
+ */
 static int dontWaitForSwappedKey(redisClient *c, robj *key) {
     list *l;
     listNode *ln;
@@ -10079,6 +10211,9 @@ static int dontWaitForSwappedKey(redisClient *c, robj *key) {
     return listLength(c->io_keys) == 0;
 }
 
+/**
+ * it will be called by vmThreadedIOCompletedJob
+ */
 static void handleClientsBlockedOnSwappedKey(redisDb *db, robj *key) {
     struct dictEntry *de;
     list *l;
@@ -10090,8 +10225,12 @@ static void handleClientsBlockedOnSwappedKey(redisDb *db, robj *key) {
 
     l = dictGetEntryVal(de);
     len = listLength(l);
-    /* Note: we can't use something like while(listLength(l)) as the list
-     * can be freed by the calling function when we remove the last element. */
+    /*
+     * Note: we can't use something like while(listLength(l)) as the list
+     * can be freed by the calling function when we remove the last element.
+     *
+     * Find all of clients which wait for this swapped key
+     */
     while (len--) {
         ln = listFirst(l);
         redisClient *c = ln->value;
