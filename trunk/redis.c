@@ -7970,12 +7970,16 @@ static void brpopCommand(redisClient *c) {
 
 /* =============================== Replication  ============================= */
 
+/**
+ * This method was called by syncWithMaster
+ */
 static int syncWrite(int fd, char *ptr, ssize_t size, int timeout) {
     ssize_t nwritten, ret = size;
     time_t start = time(NULL);
 
     timeout++;
     while(size) {
+    	// Wait for 1000ms until the given file descriptor becomes writable
         if (aeWait(fd,AE_WRITABLE,1000) & AE_WRITABLE) {
             nwritten = write(fd,ptr,size);
             if (nwritten == -1) return -1;
@@ -8018,6 +8022,7 @@ static int syncReadLine(int fd, char *ptr, ssize_t size, int timeout) {
     while(size) {
         char c;
 
+        // Only read one character to check
         if (syncRead(fd,&c,1,timeout) == -1) return -1;
         if (c == '\n') {
             *ptr = '\0';
@@ -8145,7 +8150,7 @@ static void sendBulkToSlave(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 }
 
-/* This function is called at the end of every backgrond saving.
+/* This function is called at the end of every background saving.
  * The argument bgsaveerr is REDIS_OK if the background saving succeeded
  * otherwise REDIS_ERR is passed to the function.
  *
@@ -8203,6 +8208,12 @@ static void updateSlavesWaitingBgsave(int bgsaveerr) {
     }
 }
 
+/**
+ * 1) connect to master
+ * 2) read the dump data from master
+ * 3) write the dump data to rdb file
+ * 4) load the data of rdb file into memory db
+ */
 static int syncWithMaster(void) {
     char buf[1024], tmpfile[256], authcmd[1024];
     long dumpsize;
@@ -8275,6 +8286,7 @@ static int syncWithMaster(void) {
     while(dumpsize) {
         int nread, nwritten;
 
+        // read 1024 bytes at a time
         nread = read(fd,buf,(dumpsize < 1024)?dumpsize:1024);
         if (nread <= 0) {
             redisLog(REDIS_WARNING,"I/O error trying to sync with MASTER: %s",
