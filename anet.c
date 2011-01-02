@@ -167,11 +167,13 @@ static int anetTcpGenericConnect(char *err, char *addr, int port, int flags)
     return s;
 }
 
+// block mode connection
 int anetTcpConnect(char *err, char *addr, int port)
 {
     return anetTcpGenericConnect(err,addr,port,ANET_CONNECT_NONE);
 }
 
+// non-block mode connection
 int anetTcpNonBlockConnect(char *err, char *addr, int port)
 {
     return anetTcpGenericConnect(err,addr,port,ANET_CONNECT_NONBLOCK);
