@@ -1,0 +1,1 @@
+Link to redis wiki: http://code.google.com/p/redis/wiki/index?tm=6
